@@ -89,6 +89,7 @@ pub async fn get_applications_for_both_branches<'a>(
     if duplicate_yaml.is_empty() {
         Ok((base_apps, target_apps))
     } else {
+        info!{"🤖 Skipping {} applications, because they have not changed", duplicate_yaml.len()};
         // remove duplicates
         let base_apps = base_apps
             .into_iter()
