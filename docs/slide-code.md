@@ -215,3 +215,221 @@ If someone in your organization from *Team A* changes one of their applications,
 argocd-diff-preview --file-regex="/Team-A/"
 ```
 This ensures only applications in folders matching `*/Team-A/*` are rendered.
+
+# Slide Code
+
+
+```yaml title="Application" hl_lines="7"
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: my-app
+  namespace: argocd
+  annotations:
+    argocd-diff-preview/watch-pattern: "examples/helm/my-app/.*"
+spec:
+  project: default
+  destination:
+    name: in-cluster
+    namespace: default
+  sources:
+    - repoURL: https://github.com/dag-andersen/argocd-diff-preview
+      ref: local-files
+    - path: examples/helm/charts/myApp
+      repoURL: https://github.com/dag-andersen/argocd-diff-preview
+      helm:
+        valueFiles:
+          - $local-files/examples/helm/my-app/values.yaml
+```
+
+```yaml title="ApplicationSet"
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: my-app-set
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - list:
+        elements:
+          - name: app-a
+            path: super-app
+          - name: app-b
+            path: ultra-app
+  template:
+    metadata:
+      name: "{{ .name }}"
+    spec:
+      project: default
+      destination:
+        name: in-cluster
+      sources:
+      - repoURL: https://github.com/dag-andersen/argocd-diff-preview
+        ref: local-files
+      - repoURL: https://url.to.helm.chart.com
+        chart: my-chart
+        targetRevision: vX.X.X
+        helm:
+          valueFiles:
+            - $local-files/{{.path}}/helm/values.yaml
+```
+
+```yaml title="Application"
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: my-app
+  namespace: argocd
+spec:
+  project: default
+  destination:
+    name: in-cluster
+    namespace: default
+  sources:
+    - repoURL: https://github.com/dag-andersen/argocd-diff-preview
+      ref: local-files
+    - path: examples/helm/charts/myApp
+      repoURL: https://github.com/dag-andersen/argocd-diff-preview
+      helm:
+        valueFiles:
+          - $local-files/examples/helm/values/my-app.yaml
+```
+
+```yaml title="Application"
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: something
+spec:
+  project: default
+  syncPolicy:  <- delete ❌
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - ApplyOutOfSyncOnly=true
+  destination:
+    name: https://whatever.com -> ”in-cluster” 🔄
+    namespace: something
+  sources:
+    - repoURL: https://github.com/dag-andersen/repo.git
+      ref: local-files
+      targetRevision: HEAD -> <branch-name> 🔄
+    - chart: my-chart
+      repoURL: helm-chart-registry.com
+      targetRevision: x.x.x
+      helm:
+        releaseName: something
+        valueFiles:
+          - $local-files/whatever/values.yaml
+```
+
+#### How to use it in a GitHub Actions Workflow
+
+You can use the [`tj-actions/changed-files`](https://github.com/tj-actions/changed-files) action in your workflow and pass the output to the `argocd-diff-preview` tool. Providing the tool with a list of changed files will ensure you only render applications that watch those file paths. Any application without the `argocd-diff-preview/watch-pattern` annotation will be ignored.
+
+```yaml title=".github/workflows/generate-diff.yml" linenums="1" hl_lines="16-18 39"
+name: Generate Diff Tool Change
+
+on:
+  pull_request:
+    branches:
+      - "main"
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+
+    steps:
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v45
+
+      - uses: actions/checkout@v4
+        with:
+          path: pull-request
+
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          path: main
+
+      - name: Generate Diff
+        run: |
+          docker run \
+            --network=host \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v $(pwd)/main:/base-branch \
+            -v $(pwd)/pull-request:/target-branch \
+            -v $(pwd)/output:/output \
+            -e TARGET_BRANCH=${{ github.head_ref }} \
+            -e REPO=${{ github.repository }} \
+            -e FILES_CHANGED="${{ steps.changed-files.outputs.all_changed_files }}"
+            dagandersen/argocd-diff-preview:v0.0.20
+```
+
+## Ignoring individual applications
+
+You can exclude specific applications from rendering by adding the annotation `argocd-diff-preview/ignore: "true"` to their manifest. This is useful for skipping applications that don’t require a diff preview.
+
+*Examples:*
+```yaml title="Application" hl_lines="7"
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: my-app
+  namespace: argocd
+  annotations:
+    argocd-diff-preview/ignore: "true"
+spec:
+  ...
+```
+
+```yaml title="ApplicationSet" hl_lines="6"
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: my-app
+  annotations:
+    argocd-diff-preview/ignore: "true"
+spec:
+  ...
+```
+
+## Label Selectors
+
+Run the tool with the `--selector` option to filter applications based on labels. The option supports `=`, `==`, and `!=`.
+
+*Example:*
+```bash
+argocd-diff-preview --selector "team=a"
+```
+This command :arrow_up: will target the following application :arrow_down: and ignore all applications that do not have the label `team: a`.
+
+```yaml title="Application" hl_lines="5-6"
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: my-app
+  labels:
+    team: a
+spec:
+  ...
+```
+
+## Application File Path Regex
+
+Alternatively, use the `--file-regex` option to limit rendering to Applications whose file paths match a regular expression. This is helpful when rendering changes from specific teams or directories.
+
+*Example:*
+
+If someone in your organization from *Team A* changes one of their applications, the tool can be run with:
+```bash
+argocd-diff-preview --file-regex="/Team-A/"
+```
+This ensures only applications in folders matching `*/Team-A/*` are rendered.
