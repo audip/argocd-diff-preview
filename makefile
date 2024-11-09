@@ -1,7 +1,6 @@
 gitops_repo ?= argocd-diff-preview
 github_org ?= dag-andersen
 base_branch := main
-docker_file := Dockerfile
 timeout := 120
 
 pull-repostory:
@@ -22,7 +21,7 @@ run-with-cargo: pull-repostory
 		--files-changed="$(files_changed)"
 
 run-with-docker: pull-repostory
-	docker build . -f $(docker_file) -t image
+	docker build . -t image
 	docker run \
 		--network=host \
 		-v ~/.kube:/root/.kube \

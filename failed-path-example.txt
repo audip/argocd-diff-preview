@@ -1,0 +1,27 @@
+🤖 Fetching all files in dir: base-branch
+🤖 Found 6 applications
+🤖 Patching applications for branch: main
+🤖 Patching 6 Argo CD Application[Sets] for branch: main
+🤖 Fetching all files in dir: target-branch
+🤖 Found 6 applications
+🤖 Patching applications for branch: failing-app-example
+🤖 Patching 6 Argo CD Application[Sets] for branch: failing-app-example
+🤷 No secrets found in ./secrets
+🦑 Installing Argo CD Helm Chart version: 'latest'
+🦑 Waiting for Argo CD to start...
+🦑 Argo CD is now available
+🦑 Logging in to Argo CD through CLI...
+🦑 Argo CD installed successfully
+🌚 Getting resources from base-branch
+⏳ Waiting for 5 out of 5 applications to become 'OutOfSync'. Retrying in 5 seconds. Timeout in 180 seconds...
+🌚 Got all resources from 5 applications for base
+🧼 Removing applications
+🧼 Removed applications successfully
+🌚 Getting resources from target-branch
+⏳ Waiting for 5 out of 5 applications to become 'OutOfSync'. Retrying in 5 seconds. Timeout in 180 seconds...
+❌ Failed to process application: my-app with error:
+Failed to load target state: failed to generate manifest for source 2 of 2: rpc error: code = Unknown desc = `helm template . --name-template my-app --namespace default --kube-version 1.31 --values <path to cached source>/examples/some/wrong/path/values.yaml <api versions removed> --include-crds` failed exit status 1: Error: open <path to cached source>/examples/some/wrong/path/values.yaml: no such file or directory
+Error: "Failed to process applications"
+
+
+
